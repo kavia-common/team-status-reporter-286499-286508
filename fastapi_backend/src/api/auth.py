@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError  # Handle unique constraint violations
 
 from src.api.config import settings
 from src.api.db import get_session_factory, session_scope, Base, get_engine
@@ -112,25 +113,37 @@ def register(payload: RegisterRequest, response: Response) -> TokenResponse:
     Returns:
       - TokenResponse with access_token and token_type
     """
-    _init_db()
-    with session_scope() as db:
-        existing = db.query(LocalUser).filter(LocalUser.email == payload.email.lower()).first()
-        if existing:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-
-        user = LocalUser(
-            email=payload.email.lower(),
-            display_name=payload.display_name,
-            password_hash=_hash_password(payload.password),
+    # Ensure DB is configured before attempting to use session_scope (avoids raw RuntimeError -> 500)
+    if get_session_factory() is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database not configured. Set DATABASE_URL environment variable.",
         )
-        db.add(user)
-        db.flush()  # Ensure ID is generated
 
-        access = _get_access_token(user.id)
-        refresh = _get_refresh_token(user.id)
-        _set_refresh_cookie(response, refresh)
-        response.status_code = status.HTTP_201_CREATED
-        return TokenResponse(access_token=access, token_type="bearer")
+    _init_db()
+    try:
+        with session_scope() as db:
+            existing = db.query(LocalUser).filter(LocalUser.email == payload.email.lower()).first()
+            if existing:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
+            user = LocalUser(
+                email=payload.email.lower(),
+                display_name=payload.display_name,
+                password_hash=_hash_password(payload.password),
+            )
+            db.add(user)
+            # Flush to catch unique constraint early and obtain generated ID
+            db.flush()
+
+            access = _get_access_token(user.id)
+            refresh = _get_refresh_token(user.id)
+            _set_refresh_cookie(response, refresh)
+            response.status_code = status.HTTP_201_CREATED
+            return TokenResponse(access_token=access, token_type="bearer")
+    except IntegrityError:
+        # Catch race conditions on the unique email constraint
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
 
 # PUBLIC_INTERFACE
@@ -155,6 +168,11 @@ def login(payload: LoginRequest, response: Response) -> TokenResponse:
     Returns:
       - TokenResponse with access_token and token_type
     """
+    if get_session_factory() is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database not configured. Set DATABASE_URL environment variable.",
+        )
     _init_db()
     with session_scope() as db:
         user = db.query(LocalUser).filter(LocalUser.email == payload.email.lower()).first()

@@ -3,6 +3,16 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+# Load environment variables from a .env file if present (development convenience).
+# This does not hardcode configuration; it only sources variables into process env.
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv()
+except Exception:
+    # If python-dotenv isn't available for some reason, skip silently.
+    # Requirements include python-dotenv, so this should normally load.
+    pass
+
 
 class Settings(BaseModel):
     """Application settings loaded from environment variables."""

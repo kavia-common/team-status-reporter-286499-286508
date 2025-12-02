@@ -41,3 +41,13 @@ uvicorn==0.34.0
 uvloop==0.21.0
 watchfiles==1.0.5
 websockets==15.0.1
+
+# Auth and security
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+python-jose==3.3.0
+cryptography==43.0.3
+
+# Database
+SQLAlchemy==2.0.37
+psycopg[binary]==3.2.3

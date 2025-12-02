@@ -1,0 +1,1 @@
+{"is_source_file": true, "file_id": 5, "git_revision": "", "state": 1, "description": "", "external_files": [], "external_methods": [], "published": [], "classes": [], "methods": [], "calls": [], "search-terms": [], "hash": "4253edfc1cf858bf1fb304ddd2fde72f", "format-version": 4, "code-base-name": "fastapi_backend", "filename": "supabase/schema.sql", "knowledge_revision": 10}
